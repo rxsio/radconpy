@@ -11,6 +11,9 @@ import serial.serialutil
 class RadConNotConnectedException(Exception):
     ...
 
+class RadConUnknownException(Exception):
+    ...
+
 # endregion
 
 # region Commands
@@ -56,12 +59,16 @@ class RadConDevice:
         self._stopbits = stopbits
         self._timeout = timeout
         self._serial = None
+        self._is_open = False
 
-        logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s")
+        logging.basicConfig(format="%(asctime)s [%(name)s / %(levelname)s] %(message)s")
         self._logger = logging.getLogger("RadCon")
         self._logger.setLevel(
             logging.getLevelNamesMapping().get(logger_level, logging.INFO)
         )
+        
+    def is_connected(self) -> bool:
+        return self._serial.is_open and self._is_open
 
     def connect(self) -> bool:
         """
@@ -84,17 +91,21 @@ class RadConDevice:
                 stopbits=self._stopbits,
                 timeout=self._timeout,
             )
-        except serial.serialutil.SerialException as err:
-            self._logger.warn("Cannot connect to RadCon device")
+        except Exception:
+            self._logger.warning("Cannot connect to RadCon device")
+            self._is_open = False
             return False
 
         self._logger.info("Connected to RadCon device")
+        self._is_open = True
         return True
 
     def disconnect(self):
         """
         Disconnect RadCon device
         """
+        self._is_open = False
+        
         # Check if serial exists
         if self._serial is None:
             return
@@ -108,6 +119,19 @@ class RadConDevice:
         self._logger.info("Disconnected from RadCon device")
         
     def send_command(self, command: Union[str, RadConCommands]) -> str:
+        """
+        Send command to RadCon device
+        
+        Parameters
+        ----------
+        command : str | RadConCommands 
+            Command to send
+            
+        Returns
+        -------
+        str 
+            Response for the command
+        """
         if isinstance(command, RadConCommands):
             command = command.value
         
@@ -115,18 +139,22 @@ class RadConDevice:
         self._logger.debug(f"Sending command \"{raw_command}\"")
 
         # Check if serial is open
-        if not self._serial.is_open:
+        if self._serial is None or not self._serial.is_open:
+            self._is_open = False
             raise RadConNotConnectedException()
         
-        # Clear the input buffer and send command
+        # Catch all exceptions
         try:
+            # Clear the input buffer and send command
             self._serial.read(self._serial.in_waiting)
             self._serial.write(raw_command)
-        except serial.serialutil.PortNotOpenError:
+        except (serial.serialutil.PortNotOpenError, serial.serialutil.SerialException):
+            self._is_open = False
             raise RadConNotConnectedException()
-        except serial.serialutil.SerialException:
-            raise RadConNotConnectedException()
-        
+        except Exception:
+            self._is_open = False
+            raise RadConUnknownException()
+
         # Wait for response
         time.sleep(0.1)
         
@@ -137,26 +165,84 @@ class RadConDevice:
     
     
     def readline(self) -> str:
+        """
+        Readline from serial device. Line ends with \r\n
+        
+        Returns
+        -------
+        str
+            Line contents without line ending
+        """
         line = ""
         
-        # Read until \r\n (end of line)
-        while not line.endswith("\r\n"):
-            byte = self._serial.read(1)
-            line += byte.decode("ascii")
+        # Catch all exceptions
+        try:
+            # Read until \r\n (end of line)
+            while not line.endswith("\r\n"):
+                byte = self._serial.read(1)
+                line += byte.decode("ascii")
+        except serial.serialutil.SerialException:
+            self._is_open = False
+            raise RadConNotConnectedException()
+        except Exception:
+            self._is_open = False
+            raise RadConUnknownException()
             
         # Return line withount line ending
         return line[:-2]
 
 # endregion
 
+# region RadConManager
+
+class RadConManager:
+    
+    def __init__(self, device: RadConDevice, reconnect_cooldown: float = 1, logger_level: str = "INFO"):
+        self._device = device
+        self._reconnect_cooldown = reconnect_cooldown
+        
+        logging.basicConfig(format="%(asctime)s [%(name)s / %(levelname)s] %(message)s")
+        self._logger = logging.getLogger("RadConManager")
+        self._logger.setLevel(
+            logging.getLevelNamesMapping().get(logger_level, logging.INFO)
+        )
+        
+    def ensure_connected(self):
+        self._device.connect()
+        
+    def get_firmware(self, max_tries: int = 3) -> Optional[str]:
+        self._logger.debug("Get firmware")
+        
+        tries = 0
+        while tries <= max_tries:
+            try:
+                firmware = self._device.send_command(RadConCommands.Firmware)
+                self._logger.debug(f"Firmware version: {firmware}")
+                return firmware
+            except (RadConNotConnectedException, RadConUnknownException):
+                self.ensure_connected()
+            tries += 1
+            
+            if tries <= max_tries:
+                self._logger.debug(f"Cannot get firmware version. Try: {tries} of {max_tries}")
+                time.sleep(self._reconnect_cooldown)
+            
+        self._logger.debug("Firmware version cannot be queryed")
+        return None
+            
+
+# endregion
+
 if __name__ == "__main__":
     r = RadConDevice("COM3", logger_level="DEBUG")
-    r.connect()
-    rsp = r.send_command(RadConCommands.Firmware)
+    m = RadConManager(r, logger_level="DEBUG", reconnect_cooldown=2.0)
+    print(m.get_firmware(10))
+    # r.connect()
+    # rsp = r.send_command(RadConCommands.Firmware)
     
-    while True:
-        l = r.readline()
-        print(l)
+    # while True:
+    #     l = r.readline()
+    #     print(l)
     
-    r.disconnect()
-    print(rsp)
+    # r.disconnect()
+    # print(rsp)
