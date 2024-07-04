@@ -49,3 +49,13 @@ class Measurement:
     hardware_timestamp: float # RadCon timestamp of measurement [milliseconds]
     pulse_length: int # Pulse length measured by RadCon device [microseconds]
 ```
+
+## Example usage
+This simple scripts tries to get firmware and single measurement from device
+
+```py
+device = RadConDevice("COM3") # Use COMx for Windows or /dev/ttyUSBx for Linux
+manager = RadConManager(device)
+print(manager.get_firmware())
+print(manager.get_measurement())
+```
