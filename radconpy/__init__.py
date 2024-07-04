@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+import datetime
 from enum import Enum
 import logging
 import time
@@ -33,7 +35,7 @@ class RadConDevice:
         baudrate: int = 115200,
         bytesize: int = 8,
         stopbits: int = 1,
-        timeout: Optional[float] = None,
+        timeout: Optional[float] = 0.1,
         logger_level: str = "INFO",
     ):
         """
@@ -195,6 +197,25 @@ class RadConDevice:
 
 # region RadConManager
 
+@dataclass
+class Measurement:
+    """
+    Class for storing measurement
+    
+    Fields
+    ------
+    timestamp : datetime.datetime
+        Computer timestamp of measurement
+    hardware_timestamp : float
+        Timestamp of RadCon device in milliseconds
+    pulse_length : int
+        Length of pulse in microseconds
+    """
+    timestamp: datetime.datetime
+    hardware_timestamp: float
+    pulse_length: int
+
+
 class RadConManager:
     
     def __init__(self, device: RadConDevice, reconnect_cooldown: float = 1, logger_level: str = "INFO"):
@@ -206,6 +227,8 @@ class RadConManager:
         self._logger.setLevel(
             logging.getLevelNamesMapping().get(logger_level, logging.INFO)
         )
+        
+        self.ensure_connected()
         
     def ensure_connected(self):
         self._device.connect()
@@ -227,8 +250,45 @@ class RadConManager:
                 self._logger.debug(f"Cannot get firmware version. Try: {tries} of {max_tries}")
                 time.sleep(self._reconnect_cooldown)
             
-        self._logger.debug("Firmware version cannot be queryed")
+        self._logger.warning("Firmware version cannot be queryed")
         return None
+    
+    def get_measurement(self, max_tries: int = 3) -> Measurement:
+        self._logger.debug("Get measurement")
+        
+        tries = 0
+        line = None
+        while tries <= max_tries:
+            try:
+                line = self._device.readline()
+                break
+            except (RadConNotConnectedException, RadConUnknownException):
+                self.ensure_connected()
+                
+            tries += 1
+            
+            if tries <= max_tries:
+                self._logger.debug(f"Cannot get measurement. Try: {tries} of {max_tries}")
+                time.sleep(self._reconnect_cooldown)
+    
+        if line is None:
+            self._logger.warning("Measurement cannot be get")
+            return None
+        
+        values = line.split(" ")
+        if len(values) != 2:
+            self._logger.debug(f"Invalid data received (too few values): {line}")
+            return None
+        
+        try:
+            timestamp = float(values[0])
+            pulse_length = float(values[1])
+        except ValueError:
+            self._logger.debug(f"Invalid data received (cannot convert to numbers): {line}")
+            return None
+        
+        return Measurement(datetime.datetime.now(), timestamp, pulse_length)
+
             
 
 # endregion
@@ -237,12 +297,7 @@ if __name__ == "__main__":
     r = RadConDevice("COM3", logger_level="DEBUG")
     m = RadConManager(r, logger_level="DEBUG", reconnect_cooldown=2.0)
     print(m.get_firmware(10))
-    # r.connect()
-    # rsp = r.send_command(RadConCommands.Firmware)
     
-    # while True:
-    #     l = r.readline()
-    #     print(l)
-    
-    # r.disconnect()
-    # print(rsp)
+    while True:
+        ms = m.get_measurement()
+        print(ms)
