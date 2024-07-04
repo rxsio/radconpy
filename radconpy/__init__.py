@@ -70,6 +70,14 @@ class RadConDevice:
         )
         
     def is_connected(self) -> bool:
+        """
+        Check if device is connected
+        
+        Returns
+        -------
+        bool
+            True if device is connected otherwise False
+        """
         return self._serial.is_open and self._is_open
 
     def connect(self) -> bool:
@@ -217,8 +225,21 @@ class Measurement:
 
 
 class RadConManager:
+    """
+    Manager for managing RadConDevice
+    """
     
     def __init__(self, device: RadConDevice, reconnect_cooldown: float = 1, logger_level: str = "INFO"):
+        """
+        Parameters
+        ----------
+        device : RadConDevice
+            Device to manage
+        reconnect_colldown : float = 2
+            Reconnect cooldown
+        logger_level : str = "INFO"
+            Logger level
+        """
         self._device = device
         self._reconnect_cooldown = reconnect_cooldown
         
@@ -231,9 +252,25 @@ class RadConManager:
         self.ensure_connected()
         
     def ensure_connected(self):
+        """
+        Ensure the device is connected
+        """
         self._device.connect()
         
     def get_firmware(self, max_tries: int = 3) -> Optional[str]:
+        """
+        Get firmware version of RadCon device
+        
+        Parameters
+        ----------
+        max_tries : int = 3
+            Max additional tries of querying information
+        
+        Returns
+        -------
+        Optional[str]
+            Firmware version or None if cannot query firmware version
+        """
         self._logger.debug("Get firmware")
         
         tries = 0
@@ -253,7 +290,20 @@ class RadConManager:
         self._logger.warning("Firmware version cannot be queryed")
         return None
     
-    def get_measurement(self, max_tries: int = 3) -> Measurement:
+    def get_measurement(self, max_tries: int = 3) -> Optional[Measurement]:
+        """
+        Get measurement in user-friendly way
+        
+        Parameters
+        ----------
+        max_tries : int = 3
+            Max additional tries for reconnections
+            
+        Returns
+        -------
+        Optional[Measurement]
+            Measurement of None if it cannot be quered
+        """
         self._logger.debug("Get measurement")
         
         tries = 0
