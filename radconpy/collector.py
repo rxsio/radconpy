@@ -12,6 +12,10 @@ from radconpy.manager import RadConManager
 
 @dataclass
 class RadConStatistics:
+    """
+    cpm - Counts per Minute
+    doserate - uSv/h
+    """
     timestamp: datetime
     cpm: float
     doserate: float
@@ -22,14 +26,14 @@ class RadConCollector:
     Collects statistics for RadCon device
     """
 
-    def __init__(self, manager: RadConManager, calibration_factor: float = 0.005, timebase: float = 60):
+    def __init__(self, manager: RadConManager, calibration_factor: float = 0.2, timebase: float = 60):
         """
         Parameters
         ----------
         manager : RadConManager
             Manager of the RadCon device
-        calibration_factor : float = 0.005
-            Calibration factor for calculating doserate [Gy / CPM]
+        calibration_factor : float = 0.2
+            Calibration factor for calculating doserate [uSv/h]
         timebase : float = 60
             Basic timebase (time resolution) of statistics [seconds]
         """
@@ -91,8 +95,8 @@ class RadConCollector:
             start = time.perf_counter()
 
             cps = self._count / self._timebase
-            cpm = cps * 60
-            doserate = cpm * 60 * 24 * self._calibration_factor
+            cpm = cps * 60                                  # [1/min]
+            doserate = cpm * 24 * self._calibration_factor  # [uSv/h]
 
             with self._lock:
                 self._statistics.append(
@@ -128,7 +132,7 @@ class RadConCollector:
                     ax1.set_title('CPM over Time')
                     ax1.set_ylabel('CPM')
                     ax2.set_title('Dose Rate over Time')
-                    ax2.set_ylabel('Dose Rate (Gy/d)')
+                    ax2.set_ylabel('Dose Rate (uSv/h)')
 
                     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
                     ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
