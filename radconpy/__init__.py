@@ -19,7 +19,7 @@ class MockRadConManager(RadConManager):
 if __name__ == "__main__":
     r = RadConDevice("COM3", logger_level="DEBUG")
     m = MockRadConManager(r, logger_level="DEBUG", reconnect_cooldown=2.0)
-    c = RadConCollector(m, timebase=10)
+    c = RadConCollector(m, "m1.csv", timebase=10)
 
     print(f"Firmware: {m.get_firmware(3)}")
     c.run(visualize=True)

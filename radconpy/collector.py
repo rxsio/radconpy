@@ -1,3 +1,4 @@
+import csv
 from dataclasses import dataclass
 from datetime import datetime
 from threading import Thread
@@ -20,24 +21,30 @@ class RadConStatistics:
     cpm: float
     doserate: float
 
+    def to_row(self):
+        return [self.timestamp, self.cpm, self.doserate]
+
 
 class RadConCollector:
     """
     Collects statistics for RadCon device
     """
 
-    def __init__(self, manager: RadConManager, calibration_factor: float = 0.2, timebase: float = 60):
+    def __init__(self, manager: RadConManager, filename: str, calibration_factor: float = 0.2, timebase: float = 60):
         """
         Parameters
         ----------
         manager : RadConManager
             Manager of the RadCon device
+        filename : str
+            Filename with logs
         calibration_factor : float = 0.2
             Calibration factor for calculating doserate [uSv/h]
         timebase : float = 60
             Basic timebase (time resolution) of statistics [seconds]
         """
         self._manager = manager
+        self._filename = filename
         self._calibration_factor = calibration_factor
         self._timebase = timebase
 
@@ -54,6 +61,10 @@ class RadConCollector:
         """
         Run collecting statistics
         """
+        with open(self._filename, "w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["timestamp", "cpm", "doserate"])
+
         self._collecting_thread.start()
         self._calculation_thread.start()
 
@@ -82,6 +93,7 @@ class RadConCollector:
             if measurement is not None:
                 with self._lock:
                     self._count += 1
+
                 print(self._count)
         
     def calculate(self):
@@ -108,6 +120,12 @@ class RadConCollector:
                 )
 
                 self._count = 0
+
+                to_save = self._statistics[-1]
+            
+            with open(self._filename, "a", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(to_save.to_row())
             print("cpm=", cpm)
 
             processing_time = time.perf_counter() - start
