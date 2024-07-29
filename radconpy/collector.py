@@ -19,10 +19,12 @@ class RadConStatistics:
     """
     timestamp: datetime
     cpm: float
+    cpm_error: float
     doserate: float
+    doserate_error: float
 
     def to_row(self):
-        return [self.timestamp, self.cpm, self.doserate]
+        return [self.timestamp, self.cpm, self.cpm_error, self.doserate, self.doserate_error]
 
 
 class RadConCollector:
@@ -63,7 +65,7 @@ class RadConCollector:
         """
         with open(self._filename, "w", newline="") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["timestamp", "cpm", "doserate"])
+            writer.writerow(["timestamp", "cpm", "cpm_error", "doserate", "doserate_error"])
 
         self._collecting_thread.start()
         self._calculation_thread.start()
@@ -108,14 +110,18 @@ class RadConCollector:
 
             cps = self._count / self._timebase
             cpm = cps * 60                                  # [1/min]
-            doserate = cpm * 24 * self._calibration_factor  # [uSv/h]
+            cpm_error = (cpm * 60 / self._timebase) ** (1/2)
+            doserate = cpm * 24 * self._calibration_factor  # [uSv/d]
+            doserate_error = cpm_error * 24 * self._calibration_factor
 
             with self._lock:
                 self._statistics.append(
                     RadConStatistics(
                         timestamp = datetime.now(),
                         cpm=cpm,
-                        doserate=doserate
+                        cpm_error=cpm_error,
+                        doserate=doserate,
+                        doserate_error=doserate_error
                     )
                 )
 
@@ -139,18 +145,20 @@ class RadConCollector:
                 if len(self._statistics) > 0:
                     times = [stat.timestamp for stat in self._statistics]
                     cpms = [stat.cpm for stat in self._statistics]
+                    cpms_error = [stat.cpm_error for stat in self._statistics]
                     dose_rates = [stat.doserate for stat in self._statistics]
+                    dose_rates_error = [stat.doserate_error for stat in self._statistics]
 
                     ax1.clear()
                     ax2.clear()
 
-                    ax1.plot(times, cpms, marker='o', linestyle='-', color='b')
-                    ax2.plot(times, dose_rates, marker='o', linestyle='-', color='r')
+                    ax1.errorbar(times, cpms, yerr=cpms_error, marker='o', linestyle='-', color='b')
+                    ax2.errorbar(times, dose_rates, yerr=dose_rates_error, marker='o', linestyle='-', color='r')
 
                     ax1.set_title('CPM over Time')
                     ax1.set_ylabel('CPM')
-                    ax2.set_title('Dose Rate over Time')
-                    ax2.set_ylabel('Dose Rate (uSv/h)')
+                    ax2.set_title('Doserate over Time')
+                    ax2.set_ylabel('Doserate (uSv/d)')
 
                     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
                     ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
