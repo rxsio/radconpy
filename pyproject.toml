@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "radconpy"
-version = "0.1.0"
-description = ""
+version = "0.2.0"
+description = "Small library to work with RadCon"
 authors = ["Patryk Filip Gryz <pfgryz@gmail.com>"]
 readme = "README.md"
 
