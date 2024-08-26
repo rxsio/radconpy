@@ -169,7 +169,7 @@ class SerialDevice:
         logger.debug(f"Received response for command: {response}")
         return response
 
-    def read_message(self) -> Optional[str]:
+    def read_message(self, token: Box[bool] = None) -> Optional[str]:
         """
         Reads a message from the serial device
 
@@ -180,13 +180,16 @@ class SerialDevice:
         """
         if not self.connected:
             return None
+        
+        if token is None:
+            token = Box(True)
 
         line = ""
 
         logger.debug("Reading message from serial device")
 
         try:
-            while not line.endswith("\r\n") and self.connected:
+            while not line.endswith("\r\n") and self.connected and token.value:
                 byte = self._serial.read(1)
 
                 if byte != b'':
@@ -203,5 +206,5 @@ class SerialDevice:
                 ConnectionErrorReason.Other
             )
             return None
-        print('RET')
+
         return line[:-2]

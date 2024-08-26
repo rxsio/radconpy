@@ -1,7 +1,9 @@
 import threading
 import time
+import queue
 from datetime import datetime
 
+from radconpy.api import Box
 from radconpy.events import OnRadConConnected, OnRadConDisconnected, \
     OnRadConData
 from radconpy.hardware.device import SerialDevice
@@ -21,6 +23,10 @@ class RadCon:
         self._running = False
         self._device = device
         self._reconnect_cooldown = reconnect_cooldown
+        
+        self._token = Box(True)
+        self._command_queue = queue.Queue()
+        self._command_queue_response = queue.Queue()
 
         self.on_connected = OnRadConConnected()
         self.on_disconnected = OnRadConDisconnected()
@@ -33,13 +39,18 @@ class RadCon:
         self._device.on_connected.add(self._on_connected)
         self._device.on_disconnected.add(self._on_disconnected)
 
+    def send_command(self, command: str) -> None:
+        self._command_queue.put(command)
+        self._token.set(False)
+        return self._command_queue_response.get()
+
     def _on_connected(self):
         if not self._running:
             return
 
         self.on_connected.broadcast()
 
-        self._thread = threading.Thread(target=self._observer)
+        self._thread = threading.Thread(target=self._worker)
         self._thread.start()
 
     def _on_disconnected(self):
@@ -58,9 +69,18 @@ class RadCon:
     def _reconnect(self):
         self._device.connect()
 
-    def _observer(self):
+    def _worker(self):
         while self._device.connected:
-            message = self._device.read_message()
+            message = self._device.read_message(self._token)
+
+            if not self._token.value:
+                while not self._command_queue.empty():
+                    command = self._command_queue.get()
+                    response = self._device.send_command(command)
+                    self._command_queue_response.put(response)
+                
+                self._token.set(True)
+                continue
 
             if message is None:
                 break

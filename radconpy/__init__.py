@@ -22,7 +22,10 @@ if __name__ == "__main__":
     r.start()
 
     try:
-        while True:
-            time.sleep(1)
+        while (msg := input(">>")) != "quit":
+            if msg == "f":
+                print(r.send_command("i\r\n"))
+            else:
+                print("Unknown command")
     finally:  
         r.stop()
