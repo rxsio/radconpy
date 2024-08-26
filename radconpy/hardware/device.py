@@ -5,7 +5,7 @@ from typing import Optional
 import serial
 
 from radconpy.api import Box
-from radconpy.serial.events import OnSerialDeviceConnecting, \
+from radconpy.hardware.events import OnSerialDeviceConnecting, \
     OnSerialDeviceConnected, OnSerialDeviceDisconnected, \
     OnSerialDeviceConnectionError, ConnectionErrorReason
 
@@ -186,9 +186,11 @@ class SerialDevice:
         logger.debug("Reading message from serial device")
 
         try:
-            while not line.endswith("\r\n"):
+            while not line.endswith("\r\n") and self.connected:
                 byte = self._serial.read(1)
-                line += byte.decode("ascii")
+
+                if byte != b'':
+                    line += byte.decode("ascii")
         except serial.serialutil.SerialException as e:
             logger.error(f"Serial exception during reading: {e}")
             self.on_connection_error.broadcast(
@@ -201,5 +203,5 @@ class SerialDevice:
                 ConnectionErrorReason.Other
             )
             return None
-
+        print('RET')
         return line[:-2]

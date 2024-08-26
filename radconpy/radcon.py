@@ -4,7 +4,7 @@ from datetime import datetime
 
 from radconpy.events import OnRadConConnected, OnRadConDisconnected, \
     OnRadConData
-from radconpy.serial.device import SerialDevice
+from radconpy.hardware.device import SerialDevice
 
 
 class RadCon:
@@ -90,4 +90,5 @@ class RadCon:
     def stop(self):
         self._running = False
         self._device.disconnect()
+        print('disconnect')
         # Stop thread
