@@ -23,7 +23,8 @@ class RadCon:
         self._running = False
         self._device = device
         self._reconnect_cooldown = reconnect_cooldown
-        
+
+        self._lock = threading.Lock()
         self._token = Box(True)
         self._command_queue = queue.Queue()
         self._command_queue_response = queue.Queue()
@@ -40,9 +41,12 @@ class RadCon:
         self._device.on_disconnected.add(self._on_disconnected)
 
     def send_command(self, command: str) -> None:
-        self._command_queue.put(command)
-        self._token.set(False)
-        return self._command_queue_response.get()
+        with self._lock:
+            self._command_queue.put(command)
+            self._token.set(False)
+            value = self._command_queue_response.get()
+
+        return value
 
     def _on_connected(self):
         if not self._running:
@@ -78,7 +82,7 @@ class RadCon:
                     command = self._command_queue.get()
                     response = self._device.send_command(command)
                     self._command_queue_response.put(response)
-                
+
                 self._token.set(True)
                 continue
 
