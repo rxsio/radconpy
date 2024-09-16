@@ -19,7 +19,7 @@ class RadcomPublisher(Node):
 
     def __init__(self, radcon_manager):
         super().__init__('radcon publisher')
-        self.publisher_ = self.create_publisher(FluidPressure, 'radcon_measurement', 10)
+        self.publisher_ = self.create_publisher(RadconMeasurement, 'radcon_measurement', 10)
         self.radcon_manager = radcon_manager
         timer_period = 0.5  #seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
