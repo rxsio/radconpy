@@ -1,25 +1,31 @@
-import random
 import time
 
-from radconpy.collector import RadConCollector
-from radconpy.device import RadConDevice
-from radconpy.manager import Measurement, RadConManager
+from radconpy.radcon import RadCon
 
+def on_con():
+    print("Connected")
 
-class MockRadConManager(RadConManager):
-
-    def get_measurement(self, max_tries: int = 3) -> Measurement | None:
-        time.sleep(random.randint(100, 300) / 100)
-        return 3
+def on_dis():
+    print("Disconnected")
     
-    def get_firmware(self, max_tries: int = 3) -> str | None:
-        return "MOCK"
+def on_data(t, hv, p):
+    print("Data", t, hv, p)
 
 
 if __name__ == "__main__":
-    r = RadConDevice("COM3", logger_level="DEBUG")
-    m = MockRadConManager(r, logger_level="DEBUG", reconnect_cooldown=2.0)
-    c = RadConCollector(m, "m1.csv", timebase=60)
+    r = RadCon("COM3", reconnect_cooldown=1)
+    
+    r.on_connected.add(on_con)
+    r.on_disconnected.add(on_dis)
+    r.on_data.add(on_data)
+    
+    r.start()
 
-    print(f"Firmware: {m.get_firmware(3)}")
-    c.run(visualize=True)
+    try:
+        while (msg := input(">>")) != "quit":
+            if msg == "f":
+                print(r.send_command("i\r\n"))
+            else:
+                print("Unknown command")
+    finally:  
+        r.stop()
