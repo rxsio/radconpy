@@ -3,65 +3,70 @@
 
 import rclpy
 from rclpy.node import Node
-
-from sensor_msgs.msg import FluidPressure
-from std_msgs.msg import Int64
 from radcon_msgs.msg import RadconMeasurement
 import random
 import time
-
-from radcompy_ros2_package.radconpy.collector import RadConCollector
-from radcompy_ros2_package.radconpy.device import RadConDevice
-from radcompy_ros2_package.radconpy.manager import Measurement, RadConManager
+from radconpy_ros2_package.radconpy.radcon import RadCon
 
 
-class RadcomPublisher(Node):
+class RadconPublisher(Node):
 
-    def __init__(self, radcon_manager):
-        super().__init__('radcon publisher')
+    def __init__(self):
+        super().__init__('RadconPublisher')
+
+        self.declare_parameter('port', 'COM3') 
+        self.declare_parameter('reconnect_cooldown', 1.0)
+
+        port = self.get_parameter('port').get_parameter_value().string_value
+        reconnect_cooldown = self.get_parameter('reconnect_cooldown').get_parameter_value().double_value
+        
+        self.radcon_device = RadCon(port, reconnect_cooldown=reconnect_cooldown)
+
+        
         self.publisher_ = self.create_publisher(RadconMeasurement, 'radcon_measurement', 10)
-        self.radcon_manager = radcon_manager
         timer_period = 0.5  #seconds
-        self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.timer = self.create_timer(timer_period, self.publish_measurement)
         self.i = 0
 
-    def timer_callback(self):
-        measurement= self.radcon_manager.get_measurement()
+        self.radcon_device.on_connected.add(self.on_con)
+        self.radcon_device.on_disconnected.add(self.on_dis)
+        self.radcon_device.on_data.add(self.on_data)
+        
+        self.radcon_device.start()
+
+
+    def publish_measurement(self, timestamp, hardware_timestamp, pulse_length):
 
         msg = RadconMeasurement()
-        msg.header.stamp = measurement.timestamp
+        msg.header.stamp = timestamp
 
-        msg.hardware_timestamp.sec = measurement.hardware_timestamp // 1e3 
-        msg.hardware_timestamp.nanosec = (measurement.hardware_timestamp % 1e3) * 1e6  
+        msg.hardware_timestamp.sec = hardware_timestamp // 1e3 
+        msg.hardware_timestamp.nanosec = (hardware_timestamp % 1e3) * 1e6  
 
-        msg.pulse_length.sec = measurement.pulse_length // 1e6
-        msg.pulse_length.nanosec = (measurement.pulse_length % 1e6) * 1e3
+        msg.pulse_length.sec = pulse_length // 1e6
+        msg.pulse_length.nanosec = (pulse_length % 1e6) * 1e3
 
         self.publisher_.publish(msg)
         self.get_logger().info('Publishing: "%s"' % msg.data)
         self.i += 1
 
-class MockRadConManager(RadConManager):
 
-    def get_measurement(self, max_tries: int = 3) -> Measurement | None:
-        time.sleep(random.randint(100, 300) / 100)
-        return 3
+    def on_con(self):
+        print("Connected")
+
+    def on_dis(self):
+        print("Disconnected")
+
+    def on_data(self,timestamp, hardware_timestamp, pulse_length):
+        self.radcon_publisher.publish_measurement(timestamp, hardware_timestamp, pulse_length)
     
-    def get_firmware(self, max_tries: int = 3) -> str | None:
-        return "MOCK"
-
 def main(args=None):
 
-    r = RadConDevice("COM3", logger_level="DEBUG")
-    m = MockRadConManager(r, logger_level="DEBUG", reconnect_cooldown=2.0)
-    c = RadConCollector(m, "m1.csv", timebase=60)
-    print(f"Firmware: {m.get_firmware(3)}")
-    c.run(visualize=False)
 
     rclpy.init(args=args)
-    minimal_publisher = RadcomPublisher(m)
-    rclpy.spin(minimal_publisher)
-    minimal_publisher.destroy_node()
+    radcon_publisher = RadconPublisher()
+    rclpy.spin(radcon_publisher)
+    radcon_publisher.destroy_node()
     rclpy.shutdown()
 
 
