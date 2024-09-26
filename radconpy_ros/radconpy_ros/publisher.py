@@ -38,11 +38,11 @@ class RadconPublisher(Node):
         msg = RadconMeasurement()
         msg.header.stamp = Clock().now().to_msg()
 
-        msg.hardware_timestamp_measurement.sec = int(hardware_timestamp // 1e3)
-        msg.hardware_timestamp_measurement.nanosec = int((hardware_timestamp % 1e3) * 1e6)
+        msg.hardware_timestamp.sec = int(hardware_timestamp // 1e3)
+        msg.hardware_timestamp.nanosec = int((hardware_timestamp % 1e3) * 1e6)
 
-        msg.pulse_length_measurement.sec = pulse_length // 1e6
-        msg.pulse_length_measurement.nanosec = (pulse_length % 1e6) * 1e3
+        msg.pulse_length.sec = int(pulse_length // 1e6)
+        msg.pulse_length.nanosec = int((pulse_length % 1e6) * 1e3)
 
         self.publisher_.publish(msg)
 
