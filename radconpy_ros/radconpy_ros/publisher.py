@@ -3,14 +3,10 @@
 
 import rclpy
 from rclpy.node import Node
-from radcon_msgs.msg import RadconMeasurement
+from radcon_msgs.msg import RadconMeasurement, Cpm
 from rclpy.clock import Clock
 from rclpy.executors import ExternalShutdownException
 from radcon.radcon import RadCon
-#import sys
-#sys.path.append('/workspaces/firo/src/radconpy/radconpy_ros2_package/radconpy/radconpy')
-#from radcon import RadCon
-
 
 class RadconPublisher(Node):
 
@@ -19,18 +15,25 @@ class RadconPublisher(Node):
 
         self.declare_parameter('port', 'COM3') 
         self.declare_parameter('reconnect_cooldown', 1.0)
+        self.declare_parameter('publish_rate', 1.0)
+        self.declare_parameter('cpm_window_width', 60.0)
 
         port = self.get_parameter('port').get_parameter_value().string_value
         reconnect_cooldown = self.get_parameter('reconnect_cooldown').get_parameter_value().double_value
         
         self.radcon_device = RadCon(port, reconnect_cooldown=reconnect_cooldown)
-        self.publisher_ = self.create_publisher(RadconMeasurement, 'radcon_measurement', 10)
+        self.publisher_ = self.create_publisher(RadconMeasurement, 'measurement', 10)
+        self.cpm_publisher_ = self.create_publisher(Cpm, 'cpm', 10)
 
         self.radcon_device.on_connected.add(self.on_con)
         self.radcon_device.on_disconnected.add(self.on_dis)
         self.radcon_device.on_data.add(self.on_data)
         
+        self.radcon_device.cpm_window_width = self.get_parameter('cpm_window_width').get_parameter_value().double_value
+        self.create_timer(1/self.get_parameter('publish_rate').get_parameter_value().double_value, self.update)
+        
         self.radcon_device.start()
+
 
 
     def publish_measurement(self, hardware_timestamp, pulse_length):
@@ -46,6 +49,12 @@ class RadconPublisher(Node):
 
         self.publisher_.publish(msg)
 
+    def update(self):
+        msg = Cpm()
+        msg.header.stamp = Clock().now().to_msg()
+        msg.cpm = float(self.radcon_device.cpm)
+
+        self.cpm_publisher_.publish(msg)
 
     def on_con(self):
         self.get_logger().info('Connected')

@@ -13,10 +13,12 @@ find_package(std_msgs REQUIRED)
 
 find_package(rosidl_default_generators REQUIRED)
 
-rosidl_generate_interfaces(${PROJECT_NAME}
+rosidl_generate_interfaces(
+  ${PROJECT_NAME}
   "msg/RadconMeasurement.msg"
-   DEPENDENCIES std_msgs
- )
+  "msg/Cpm.msg"
+  DEPENDENCIES
+  std_msgs)
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights

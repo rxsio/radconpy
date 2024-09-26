@@ -1,7 +1,8 @@
 import threading
 import time
 import queue
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import deque
 
 from .api import Box
 from .events import OnRadConConnected, OnRadConDisconnected, \
@@ -15,13 +16,31 @@ class RadCon:
             self,
             port: str,
             reconnect_cooldown: float = 1,
+            cpm_window_width: float = 60,
             device: SerialDevice = None
     ):
+        """
+        Initialize a RadCon device
+
+        Parameters
+        ----------
+        port : str
+            Port on which RadCon is connected
+        reconnect_cooldown : float = 1.0
+            Cooldown between reconnections
+        cpm_width_width : float = 60
+            Width of the CPM (Counts per Minute) sliding window in seconds
+        device : Optional[SerialDevice] = None
+            Serial device on which RadCon is connected
+        """
         if device is None:
             device = SerialDevice(port)
 
         self._running = False
         self._device = device
+        self._pulse_next_update = datetime.now()
+        self._pulse_timestamps = deque()
+        self._cpm_window_width = cpm_window_width
         self._reconnect_cooldown = reconnect_cooldown
 
         self._lock = threading.Lock()
@@ -39,6 +58,54 @@ class RadCon:
         # Event Listeners
         self._device.on_connected.add(self._on_connected)
         self._device.on_disconnected.add(self._on_disconnected)
+        self.on_data.add(self._on_data)
+
+    @property
+    def cpm(self) -> float:
+        """
+        Measured CPM (Counts per Minute)
+
+        Returns
+        -------
+        float
+            Counts per Minute
+        """
+        if len(self._pulse_timestamps) == 0:
+            return 0
+        
+        self._filter_pulses()
+
+        return len(self._pulse_timestamps) / self._cpm_window_width * 60
+
+    @property
+    def cpm_window_width(self) -> float:
+        """
+        Width of the sliding window of CPM (Counts per Minute)
+
+        Returns
+        -------
+        float
+            Window width in seconds
+        """
+        return self._cpm_window_width
+
+    @cpm_window_width.setter
+    def cpm_window_width(self, value: float) -> None:
+        """
+        Sets width of the CPM (Counts per Minute) sliding window
+        
+        Parameters
+        ----------
+        seconds : float
+            Width of the sliding window
+        """
+        if value <= 0:
+            raise ValueError(
+                "Sliding window width cannot be less or equal than zero"
+            )
+        
+        self._pulse_next_update = datetime.now()
+        self._cpm_window_width = value
 
     def send_command(self, command: str) -> None:
         with self._lock:
@@ -69,6 +136,26 @@ class RadCon:
         time.sleep(self._reconnect_cooldown)
         self._reconnect_thread = threading.Thread(target=self._reconnect)
         self._reconnect_thread.start()
+
+    def _on_data(self, timestamp, hardware_timestamp, pulse_length):
+        if len(self._pulse_timestamps) == 0:
+            self._pulse_next_update = timestamp + timedelta(seconds=self._cpm_window_width)
+
+        if len(self._pulse_timestamps) > 1000:
+            self._filter_pulses()
+
+        self._pulse_timestamps.append(timestamp)
+
+    def _filter_pulses(self) -> None:
+        current = datetime.now()
+        if current <= self._pulse_next_update:
+            return
+        
+        while len(self._pulse_timestamps) > 0 and self._pulse_timestamps[0] < current:
+            self._pulse_timestamps.popleft()
+
+        if len(self._pulse_timestamps) > 0:
+            self._pulse_next_update = self._pulse_timestamps[0]
 
     def _reconnect(self):
         self._device.connect()
@@ -108,11 +195,15 @@ class RadCon:
             )
 
     def start(self):
+        """
+        Connects to RadCon and starts observing
+        """
         self._running = True
         self._device.connect()
 
     def stop(self):
+        """
+        Disconnects from RadCon and stops observign
+        """
         self._running = False
         self._device.disconnect()
-        print('disconnect')
-        # Stop thread
