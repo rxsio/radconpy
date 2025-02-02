@@ -146,7 +146,7 @@ class RadCon:
 
         self._pulse_timestamps.append(timestamp)
 
-    def _self_filter_pulses(self) -> None:
+    def _filter_pulses(self) -> None:
         current = datetime.now()
         if current <= self._pulse_next_update:
             return
