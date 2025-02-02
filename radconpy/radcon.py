@@ -1,7 +1,7 @@
 import threading
 import time
 import queue
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import deque
 
 from radconpy.api import Box
@@ -139,7 +139,7 @@ class RadCon:
 
     def _on_data(self, timestamp, hardware_timestamp, pulse_length):
         if len(self._pulse_timestamps) == 0:
-            self._pulse_next_update = timestamp + datetime.timedelta(seconds=self._cpm_window_width)
+            self._pulse_next_update = timestamp + timedelta(seconds=self._cpm_window_width)
 
         if len(self._pulse_next_update) > 1000:
             self._filter_pulses()
