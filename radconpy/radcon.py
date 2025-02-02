@@ -141,7 +141,7 @@ class RadCon:
         if len(self._pulse_timestamps) == 0:
             self._pulse_next_update = timestamp + timedelta(seconds=self._cpm_window_width)
 
-        if len(self._pulse_next_update) > 1000:
+        if len(self._pulse_timestamps) > 1000:
             self._filter_pulses()
 
         self._pulse_timestamps.append(timestamp)
