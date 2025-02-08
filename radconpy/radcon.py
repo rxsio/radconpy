@@ -17,7 +17,8 @@ class RadCon:
             port: str,
             reconnect_cooldown: float = 1,
             cpm_window_width: float = 60,
-            device: SerialDevice = None
+            device: SerialDevice = None,
+            calibration_factor: float = 0.2
     ):
         """
         Initialize a RadCon device
@@ -32,6 +33,7 @@ class RadCon:
             Width of the CPM (Counts per Minute) sliding window in seconds
         device : Optional[SerialDevice] = None
             Serial device on which RadCon is connected
+        calibration_factor : Scaling factor from CPM to mSv/h
         """
         if device is None:
             device = SerialDevice(port)
@@ -54,6 +56,7 @@ class RadCon:
 
         self._thread = None
         self._reconnect_thread = None
+        self._calibration_factor = calibration_factor
 
         # Event Listeners
         self._device.on_connected.add(self._on_connected)
@@ -106,6 +109,20 @@ class RadCon:
         
         self._pulse_next_update = datetime.now()
         self._cpm_window_width = value
+
+    @property
+    def doserate_mSv_h(self) -> float:
+        """
+        Converts measured CPM (Counts per Minute) to dose rate in mSv/h
+
+        Returns
+        -------
+        float
+            Dose rate in mSv/h
+        """
+    
+        return self.cpm * self._calibration_factor
+
 
     def send_command(self, command: str) -> None:
         with self._lock:
